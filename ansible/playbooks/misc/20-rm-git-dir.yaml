@@ -1,0 +1,6 @@
+---
+- hosts: localhost
+  tasks:
+    - name: Find and remove all .git directories
+      shell: |
+        find ../../repos -type d -name '.git' -exec rm -rf {} +

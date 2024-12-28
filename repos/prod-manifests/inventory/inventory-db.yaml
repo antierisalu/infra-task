@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: inventory-db
+  namespace: default
+spec:
+  serviceName: "inventory-db"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory-db
+  template:
+    metadata:
+      labels:
+        app: inventory-db
+    spec:
+      containers:
+        - name: inventory-db
+          image: antikaz/orcs:inventory-db
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: inventory-db-storage
+              mountPath: /var/lib/postgresql/data
+          envFrom:
+            - secretRef:
+                name: inventory-secret
+  volumeClaimTemplates:
+    - metadata:
+        name: inventory-db-storage
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: manual
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-db
+  namespace: default
+spec:
+  selector:
+    app: inventory-db
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432

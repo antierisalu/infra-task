@@ -1,0 +1,59 @@
+---
+- hosts: localhost
+  tasks:
+    - name: Include vault variables
+      include_vars:
+        file: ../../vault.yml
+
+    - name: Find repository directories
+      find:
+        paths: "../../../repos"
+        file_type: directory
+      register: repo_dirs
+
+    - name: Get GitLab group ID
+      uri:
+        url: "{{ gitlab_url }}/api/v4/groups?search={{ gitlab_group_name }}"
+        method: GET
+        headers:
+          PRIVATE-TOKEN: "{{ gitlab_api_token }}"
+      register: gitlab_group_info
+
+
+    - name: Set group ID variable
+      set_fact:
+        group_id: "{{ (gitlab_group_info.json | selectattr('name', 'equalto', gitlab_group_name) | first).id }}"
+
+    - name: Print group ID
+      debug:
+        var: group_id
+
+    - name: Create projects in GitLab group
+      uri:
+        url: "{{ gitlab_url }}/api/v4/projects"
+        method: POST
+        headers:
+          PRIVATE-TOKEN: "{{ gitlab_api_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ item.path | basename }}"
+          namespace_id: "{{ group_id }}"
+          initialize_with_readme: true
+        status_code: 201
+      loop: "{{ repo_dirs.files }}"
+      register: created_projects
+
+    - name: Push repositories to GitLab
+      shell: |
+        cd {{ item.path }}
+        git init
+        git remote add origin ssh://git@192.168.2.4:2424/{{ gitlab_group_name }}/{{ item.path | basename }}.git
+        git add .
+        git commit -m "Initial commit"
+        git checkout -b develop
+        git push -u origin develop
+      loop: "{{ repo_dirs.files }}"
+      environment:
+        GIT_SSH_COMMAND: "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no"
+

@@ -1,0 +1,5 @@
+---
+- hosts: arch
+  tasks:
+    - name: Check connection
+      ping:

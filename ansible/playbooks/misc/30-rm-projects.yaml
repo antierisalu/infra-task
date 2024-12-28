@@ -1,0 +1,39 @@
+---
+- hosts: localhost
+  tasks:
+    - name: Include vault variables
+      include_vars:
+        file: ../../vault.yml
+        
+    - name: Get GitLab group ID
+      uri:
+        url: "{{ gitlab_url }}/api/v4/groups?search={{ gitlab_group_name }}"
+        method: GET
+        headers:
+          PRIVATE-TOKEN: "{{ gitlab_api_token }}"
+      register: gitlab_group_info
+
+    - name: Set group ID variable
+      set_fact:
+        group_id: "{{ (gitlab_group_info.json | selectattr('name', 'equalto', gitlab_group_name) | first).id }}"
+
+    - name: Get the list of projects in the group
+      uri:
+        url: "{{ gitlab_url }}/api/v4/groups/{{ group_id }}/projects"
+        method: GET
+        headers:
+          PRIVATE-TOKEN: "{{ gitlab_api_token }}"
+      register: projects_list
+
+    - name: Delete each project
+      uri:
+        url: "{{ gitlab_url }}/api/v4/projects/{{ item.id }}"
+        method: DELETE
+        headers:
+          PRIVATE-TOKEN: "{{ gitlab_api_token }}"
+      loop: "{{ projects_list.json }}"
+      register: delete_results
+
+    - name: Debug delete results
+      debug:
+        var: delete_results

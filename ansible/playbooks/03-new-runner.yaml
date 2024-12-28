@@ -1,0 +1,48 @@
+---
+- hosts: ubuntu
+  tasks:
+    - name: Include vault variables
+      include_vars:
+        file: ../vault.yml
+
+    - name: Create new GitLab Runner
+      uri:
+        url: "{{ gitlab_url }}/api/v4/user/runners"
+        method: POST
+        headers:
+          PRIVATE-TOKEN: "{{ gitlab_api_token }}"
+        body:
+          runner_type: "instance_type"
+        body_format: form-urlencoded
+        status_code: 201
+      register: runner_creation_response
+
+    - name: Extract registration token
+      set_fact:
+        registration_token: "{{ runner_creation_response.json.token }}"
+    - debug:
+        var: registration_token
+
+    - name: Register GitLab Runner
+      community.docker.docker_container_exec:
+        container: gitlab-runner
+        command: >
+          gitlab-runner register
+          --non-interactive
+          --url "{{ gitlab_url }}"
+          --token "{{ registration_token }}"
+          --executor "docker"
+          --docker-image "docker:dind"
+          --docker-volumes=/var/run/docker.sock:/var/run/docker.sock
+          --locked "false"
+
+      register: runner_registration
+
+    - name: Read the GitLab Runner configuration file
+      community.docker.docker_container_exec:
+        container: gitlab-runner
+        command: cat /etc/gitlab-runner/config.toml
+      register: config_toml
+
+    - debug:
+        var: config_toml.stdout_lines

@@ -1,0 +1,32 @@
+---
+- hosts: ubuntu
+  become: true
+  tasks:
+    - name: Create GitLab directories
+      file:
+        path: "/var/lib/gitlab/{{ item }}"
+        state: directory
+        mode: 0755
+      loop: # For using {{ item }} in the path:
+        - config
+        - data
+        - logs
+    
+    - name: Set correct ownership for GitLab directories
+      file:
+        path: "/var/lib/gitlab"
+        owner: 1000
+        group: 1000
+        recurse: yes # Apply to all subdirectories
+
+    - name: Copy docker-compose.yml file to the server
+      copy:
+        src: ../docker-compose-gitlab.yaml # local docker-compose.yml for gitlab
+        dest: /var/lib/gitlab/docker-compose.yml
+        mode: 0644
+
+    - name: Start Gitlab with Docker Compose
+      community.docker.docker_compose_v2:
+        project_src: /var/lib/gitlab
+        state: present
+        pull: always 

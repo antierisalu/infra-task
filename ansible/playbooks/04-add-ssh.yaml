@@ -1,0 +1,33 @@
+---
+- name: Add SSH key to GitLab
+  hosts: localhost
+  tasks:
+    - name: Include vault variables
+      include_vars:
+        file: ../vault.yml
+
+    - name: Check if the SSH key exists
+      stat:
+        path: ~/.ssh/id_rsa.pub
+      register: ssh_key
+
+    - name: Read the public key
+      slurp:
+        src: ~/.ssh/id_rsa.pub
+      register: public_key
+
+    - name: Add SSH key to GitLab
+      uri:
+        url: "{{ gitlab_url }}/api/v4/user/keys"
+        method: POST
+        headers:
+          PRIVATE-TOKEN: "{{ gitlab_api_token }}"
+        body_format: json
+        body:
+          {
+            "title": "My SSH Key",
+            "key": "{{ public_key.content | b64decode }}"
+          }
+        status_code: 201
+  vars:
+    gitlab_private_token: "your_gitlab_private_token_here"

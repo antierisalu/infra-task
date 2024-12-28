@@ -1,0 +1,28 @@
+---
+- hosts: ubuntu
+  become: true
+  tasks:
+    - name: Create GitLab runner directories
+      file:
+        path: "/var/lib/gitlab/runner"
+        state: directory
+        mode: 0755
+
+    - name: Set correct ownership for GitLab runner directories 
+      file:
+        path: "/var/lib/gitlab/runner"
+        owner: 1000
+        group: 1000
+
+    - name: Copy docker-compose-runner.yml file to the server 
+      copy:
+        src: ../docker-compose-runner.yaml
+        dest: /var/lib/gitlab/runner/docker-compose.yaml
+        mode: 0644
+    
+    - name: Start Gitlab runner with Docker Composer
+      community.docker.docker_compose_v2:
+        project_src: /var/lib/gitlab/runner
+        state: present
+        pull: always
+

@@ -1,0 +1,67 @@
+image: registry.gitlab.com/gitlab-org/terraform-images/stable:latest
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      variables:
+        ENV: "production"
+    - if: $CI_COMMIT_BRANCH == "develop"
+      variables:
+        ENV: "staging"
+
+variables:
+  TF_ROOT: ${CI_PROJECT_DIR}
+  TF_ADDRESS: ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${ENV}_state
+  TF_VAR_AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
+  TF_VAR_AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+  TF_VAR_AWS_REGION: ${AWS_REGION}
+
+cache:
+  key: ${ENV}_state
+  paths:
+    - ${TF_ROOT}/.terraform
+
+before_script:
+  - cd ${TF_ROOT}
+
+stages:
+  - init
+  - build
+  - deploy
+  - cleanup
+
+init:
+  stage: init
+  script:
+    - gitlab-terraform init
+    - gitlab-terraform validate
+
+plan:
+  stage: build
+  script:
+    - echo "Environment ${ENV}"
+    - echo "Branch ${CI_COMMIT_BRANCH}"
+    - gitlab-terraform plan -var="env=${ENV}" 
+    - gitlab-terraform plan-json -var="env=${ENV}"
+  artifacts:
+    name: plan
+    paths:
+      - ${TF_ROOT}/plan.cache
+    reports:
+      terraform:  ${TF_ROOT}/plan.json
+
+apply:
+  stage: deploy
+  script:
+    - gitlab-terraform apply
+  dependencies:
+    - plan
+  when: manual
+
+destroy:
+  stage: cleanup
+  script:
+    - gitlab-terraform destroy -var="env=${ENV}"
+  dependencies:
+    - plan
+  when: manual

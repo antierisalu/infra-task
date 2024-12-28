@@ -1,0 +1,19 @@
+{
+  "name": "billing",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "test": "mocha",
+    "start": "node consumer.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "amqplib": "^0.10.4",
+    "express": "^4.21.0",
+    "pg": "^8.13.0"
+  }
+}

@@ -1,0 +1,22 @@
+---
+services:
+  dind:
+    image: docker:dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    command:
+      - --storage-driver=overlay2
+    restart: unless-stopped
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:alpine
+    container_name: gitlab-runner
+    depends_on:
+      - dind
+    volumes:
+     - '/var/lib/gitlab/runner/:/etc/gitlab-runner'
+     - '/var/run/docker.sock:/var/run/docker.sock'
+    environment:
+      - DOCKER_HOST=tcp://dind:2375
+    restart: unless-stopped

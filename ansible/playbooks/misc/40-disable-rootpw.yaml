@@ -1,0 +1,19 @@
+- hosts: ubuntu
+  become: true
+  tasks:
+    - name: Ensure Ansible user exists (if it doesn't already)
+      user:
+        name: zservu
+        state: present
+
+    - name: Set passwordless sudo for Ansible user for specific commands
+      lineinfile:
+        path: /etc/sudoers
+        state: present
+        line: 'zservu ALL=(ALL) NOPASSWD: ALL' # /usr/bin/apt, /usr/bin/docker # Add or remove commands as needed
+        validate: 'visudo -cf %s'
+        create: yes
+
+    - name: Verify the sudoers configuration
+      command: visudo -c
+      changed_when: false

@@ -1,0 +1,19 @@
+---
+- hosts: ubuntu
+  become: true
+  tasks:
+
+    - name: Get GitLab root password
+      community.docker.docker_container_exec:
+        container: gitlab  # Name of your GitLab web container
+        command: "cat /etc/gitlab/initial_root_password"
+      register: root_password_output
+      changed_when: false
+
+    - name: Extract GitLab root password
+      set_fact:
+        gitlab_root_password: "{{ root_password_output.stdout | regex_search('Password: (.*)', '\\1') }}"
+
+    - name: Print GitLab root password (for initial setup ONLY)
+      debug:
+        msg: "Initial GitLab root password: {{ gitlab_root_password }}"

@@ -1,0 +1,42 @@
+---
+- hosts: localhost
+
+  vars_files:
+    - ../../vault.yml
+
+  vars:
+    variables:
+      - { key: "AWS_ACCESS_KEY_ID", value: "{{ AWS_ACCESS_KEY_ID }}", masked: true }
+      - { key: "AWS_DEFAULT_REGION", value: "{{ AWS_DEFAULT_REGION }}", masked: true }
+      - { key: "AWS_SECRET_ACCESS_KEY", value: "{{ AWS_SECRET_ACCESS_KEY }}", masked: true }
+      - { key: "DOCKERHUB_PASSWORD", value: "{{ DOCKERHUB_PASSWORD }}", masked: true }
+      - { key: "DOCKERHUB_USERNAME", value: "{{ DOCKERHUB_USERNAME }}"}
+      - { key: "GITLAB_TOKEN", value: "{{ GITLAB_TOKEN }}", masked: true }
+      - { key: "GITLAB_USERNAME", value: "{{ GITLAB_USERNAME }}" }
+      - { key: "SNYK_TOKEN", value: "{{ SNYK_TOKEN }}", masked: true }
+
+  tasks:
+    - name: Get GitLab group ID
+      uri:
+        url: "{{ gitlab_url }}/api/v4/groups?search={{ gitlab_group_name }}"
+        method: GET
+        headers:
+          PRIVATE-TOKEN: "{{ gitlab_api_token }}"
+      register: gitlab_group_info
+
+    - name: Set group ID variable
+      set_fact:
+        group_id: "{{ (gitlab_group_info.json | selectattr('name', 'equalto', gitlab_group_name) | first).id }}"
+
+    - name: Add variables to the group
+      uri:
+        url: "{{ gitlab_url }}/api/v4/groups/{{ group_id }}/variables"
+        method: POST
+        headers:
+          PRIVATE-TOKEN: "{{ gitlab_api_token }}"
+          Content-Type: "application/json"
+        body_format: json
+        body: "{{ item }}"
+      loop: "{{ variables }}"
+      loop_control:
+        loop_var: item

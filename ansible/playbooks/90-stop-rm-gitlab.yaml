@@ -1,0 +1,54 @@
+---
+- name: Stop and remove GitLab and GitLab Runner containers, then remove /var/lib/gitlab
+  hosts: ubuntu
+  become: true
+  tasks:
+    - name: Stop GitLab container
+      docker_container:
+        name: gitlab
+        state: stopped
+      register: gitlab_container
+      ignore_errors: true
+
+    - name: Wait for GitLab container to stop
+      docker_container_info:
+        name: gitlab
+      register: gitlab_info
+      until: gitlab_info.containers | length == 0 or gitlab_info.containers[0].State.Status == "exited"
+      retries: 5
+      delay: 10
+      when: gitlab_container.changed
+
+    - name: Remove GitLab container
+      docker_container:
+        name: gitlab
+        state: absent
+      ignore_errors: true
+
+    - name: Stop GitLab Runner container
+      docker_container:
+        name: gitlab-runner
+        state: stopped
+      register: gitlab_runner_container
+      ignore_errors: true
+
+    - name: Wait for GitLab Runner container to stop
+      docker_container_info:
+        name: gitlab-runner
+      register: gitlab_runner_info
+      until: gitlab_runner_info.containers | length == 0 or gitlab_runner_info.containers[0].State.Status == "exited"
+      retries: 5
+      delay: 10
+      when: gitlab_runner_container.changed
+
+    - name: Remove GitLab Runner container
+      docker_container:
+        name: gitlab-runner
+        state: absent
+      ignore_errors: true
+
+    - name: Remove /var/lib/gitlab directory
+      file:
+        path: /var/lib/gitlab
+        state: absent
+      become: true

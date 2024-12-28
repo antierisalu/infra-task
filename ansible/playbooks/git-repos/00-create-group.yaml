@@ -1,0 +1,19 @@
+---
+- hosts: ubuntu
+  tasks:
+    - name: Include vault variables
+      include_vars:
+        file: ../../vault.yml
+
+    - name: Create GitLab group
+      uri:
+        url: "{{ gitlab_url }}/api/v4/groups"
+        method: POST
+        headers:
+          PRIVATE-TOKEN: "{{ gitlab_api_token }}"
+          Content-Type: application/json
+        body_format: json
+        body:
+          name: "{{ gitlab_group_name }}"
+          path: "{{ gitlab_group_path }}"
+        status_code: 201

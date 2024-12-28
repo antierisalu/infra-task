@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: billing
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: billing
+  template:
+    metadata:
+      labels:
+        app: billing
+    spec:
+      initContainers:
+      - name: wait-for-billing-db
+        image: busybox
+        command: ['sh', '-c', 'until nc -z -v -w30 billing-db.default.svc.cluster.local 5432; do echo waiting for billing-db; sleep 5; done;']
+      containers:
+      - name: billing
+        image: antikaz/billing:39
+        ports:
+          - containerPort: 5000
+        envFrom:
+          - secretRef:
+              name: billing-secret
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: billing
+  namespace: default
+spec:
+  selector:
+    app: billing
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+

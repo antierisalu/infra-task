@@ -1,0 +1,73 @@
+stages:
+  - test
+  - build
+  - deploy_staging
+  - deploy_production
+
+variables:
+  APP_NAME: $CI_PROJECT_NAME
+  APP_VERSION: $CI_PIPELINE_IID
+  GIT: black.matansa.ee
+  ACCOUNT: crud
+  REPO: manifests
+  REPO_PROD: manifests-prod
+
+image: alpine:3.21
+
+test_job:
+  stage: test
+  variables:
+    SNYK_TOKEN: $SNYK_TOKEN
+  script:
+    - apk add --no-cache npm nodejs
+    - npm install
+    - npm install -g snyk
+    - snyk auth $SNYK_TOKEN
+    - echo "Running Snyk to check for vulnerabilities"
+    - snyk test
+
+build_job:
+  image: docker:latest
+  stage: build
+  services:
+    - docker:dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  before_script:
+    - docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+  script:
+    - docker build --build-arg CI_PIPELINE_IID=$CI_PIPELINE_IID -t $DOCKERHUB_USERNAME/$APP_NAME:$APP_VERSION .
+    - docker push $DOCKERHUB_USERNAME/$APP_NAME:$APP_VERSION
+
+.deploy_job:
+  script:
+    - cat $APP_NAME/$APP_NAME.yaml | grep image
+    - |
+      sed -i "s|image: .*${APP_NAME}.*$|image: $DOCKERHUB_USERNAME/$APP_NAME:$APP_VERSION|g" $APP_NAME/$APP_NAME.yaml
+    - cat $APP_NAME/$APP_NAME.yaml | grep image
+    - git config --global user.email "ci@cd"
+    - git config --global user.name "$GITLAB_USERNAME"
+    - git add $APP_NAME/$APP_NAME.yaml
+    - git commit -m "Update image version to $APP_VERSION"
+    - git push origin main
+
+deploy_job_staging:
+  extends: .deploy_job
+  stage: deploy_staging
+  before_script:
+    - apk add --no-cache git
+    - git clone https://$GITLAB_USERNAME:$GITLAB_TOKEN@$GIT/$ACCOUNT/$REPO.git
+    - cd $REPO
+  except:
+    - main
+
+deploy_job_production:
+  extends: .deploy_job
+  stage: deploy_production
+  when: manual
+  only:
+    - main
+  before_script:
+    - apk add --no-cache git
+    - git clone https://$GITLAB_USERNAME:$GITLAB_TOKEN@$GIT/$ACCOUNT/$REPO_PROD.git
+    - cd $REPO_PROD

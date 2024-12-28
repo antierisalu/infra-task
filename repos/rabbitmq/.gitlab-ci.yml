@@ -1,0 +1,40 @@
+stages:
+  - test
+  - build
+  # - deploy
+
+test_job:
+  image: node:latest
+  stage: test
+  variables:
+    SNYK_TOKEN: $SNYK_TOKEN
+  script:
+    - echo "Installing dependencies"
+    - npm install
+    - echo "Installing Snyk"
+    - npm install -g snyk
+    - echo "Authenticating Snyk"
+    - snyk auth $SNYK_TOKEN
+    - echo "Running Snyk to check for vulnerabilities"
+    - snyk test
+
+# Build a Docker image with the existing Dockerfile and push it to Docker Hub
+build_job:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  before_script:
+    - docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+  script:
+    - docker build -t $DOCKERHUB_USERNAME/rabbitmq:latest .
+    - docker push $DOCKERHUB_USERNAME/rabbitmq:latest
+
+# Deploy using the custom Docker image from Docker Hub
+# deploy_job:
+#   stage: deploy
+#   image: $DOCKERHUB_USERNAME/rabbitmq:latest
+#   script:
+#     - echo "Starting rabbitmq service"

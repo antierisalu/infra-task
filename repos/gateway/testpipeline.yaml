@@ -1,0 +1,106 @@
+stages:
+  - test_code
+  - build_staging
+  - deploy_staging
+  - test_staging
+  - build_production
+  - deploy_production
+  - test_production
+
+variables:
+  STAGING_ADDRESS: 51.21.132.11
+  OS_USER: ubuntu
+  APP_NAME: gateway
+  APP_PORT: $GATEWAY_PORT
+  APP_VERSION: $CI_PIPELINE_IID
+  PROD_ADDRESS: 13.48.13.130
+  PROD_PORT: 80
+  PROD_REPO: orca
+  PROD_APP_NAME: gateway
+  DOCKER_VARS: -e APP_VERSION=$APP_VERSION -e GATEWAY_URL=$GATEWAY_URL -e GATEWAY_PORT=$GATEWAY_PORT -e GATEWAY_INVENTORY_URL=$GATEWAY_INVENTORY_URL -e GATEWAY_BILLING_URL=$GATEWAY_BILLING_URL
+
+
+test_code:
+  image: alpine:3.21
+  stage: test_code
+  variables:
+    SNYK_TOKEN: $SNYK_TOKEN
+  script:
+    - echo "App Version $APP_VERSION"
+    - apk add --no-cache npm nodejs rsync
+    - echo "Installing dependencies"
+    - npm install
+    - echo "Test environment variable"
+    - npm test
+    - echo "Installing Snyk"
+    - npm install -g snyk
+    - echo "Authenticating Snyk"
+    - snyk auth $SNYK_TOKEN
+    - echo "Running Snyk to check for vulnerabilities"
+    - snyk test
+
+.build_job:
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_DRIVER: overlay2
+  before_script:
+    - docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+  script:
+    - docker build -t $DOCKERHUB_USERNAME/$APP_NAME:$APP_VERSION .
+    - docker push $DOCKERHUB_USERNAME/$APP_NAME:$APP_VERSION
+
+build_staging:
+  stage: build_staging
+  extends: .build_job
+
+build_production:
+  stage: build_production
+  extends: .build_job
+  variables:
+    APP_NAME: $PROD_REPO
+    APP_VERSION: $PROD_APP_NAME
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_COMMIT_DEFAULT_BRANCH
+
+.deploy:
+  before_script:
+    - chmod 400 $AWS_EC2_KEY_PEM
+  script:
+    - ssh -i $AWS_EC2_KEY_PEM -o StrictHostKeyChecking=no $OS_USER@$OS_ADDRESS "
+      set -x
+      docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD &&
+      docker ps -a | grep $APP_NAME | awk '{print \$1}' | xargs -r docker stop | xargs -r docker rm &&
+      docker run -d -p $APP_PORT:$APP_PORT $DOCKER_VARS $DOCKERHUB_USERNAME/$APP_NAME:$APP_VERSION "
+
+deploy_staging_job:
+  stage: deploy_staging
+  variables:
+    OS_ADDRESS: $STAGING_ADDRESS
+  extends: .deploy
+
+deploy_production_job:
+  stage: deploy_production
+  when: manual
+  variables:
+    OS_ADDRESS: $PROD_ADDRESS
+    APP_NAME: $PROD_REPO
+    APP_VERSION: $PROD_APP_NAME
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_COMMIT_DEFAULT_BRANCH
+  extends: .deploy
+
+test_staging_job:
+  stage: test_staging
+  image: curlimages/curl:latest
+  script:
+    - curl -s http://$STAGING_ADDRESS:$APP_PORT/health | grep $APP_VERSION
+
+test_production_job:
+  stage: test_production
+  image: curlimages/curl:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_COMMIT_DEFAULT_BRANCH
+  script:
+    - curl -s http://$PROD_ADDRESS:$APP_PORT/health | grep $APP_NAME

@@ -1,0 +1,22 @@
+---
+services:
+  gitlab:
+    container_name: gitlab
+    image: 'gitlab/gitlab-ce:17.4.6-ce.0' # CE for Community Edition
+    restart: unless-stopped
+    hostname: 'gitlab'
+    ports:
+      - '80:80'
+      - '2424:22'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://192.168.2.4'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2424
+        letsencrypt['enable'] = false
+        nginx['listen_port'] = 80
+        nginx['listen_https'] = false
+    volumes:
+      - /var/lib/gitlab/config:/etc/gitlab
+      - /var/lib/gitlab/data:/var/opt/gitlab
+      - /var/lib/gitlab/logs:/var/log/gitlab
+    shm_size: '256m' # Required for some GitLab features
